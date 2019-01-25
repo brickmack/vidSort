@@ -1,98 +1,135 @@
 #!/bin/bash
 
+#vidSort v1.1
 #Command line utility to list duration and title of all files in a directory. Useful for manual file de-duplication
 
 #Flags
-#	-s, -sa (not yet implemented): sort by duration (ascending)
-#	-sd (not yet implemented): sort by duration (descending)
+#	-s, -sa: sort by duration (ascending)
+#	-sd: sort by duration (descending)
 #	-m: only show files with matching durations
-#	-v: verbose (not yet implemented, always verbose)
-#	-h: help (not yet implemented)
+#	-v: verbose
+#	-h: help
 
-#Target directory must always be the first argument!
-
-
-#make sure user gave a path (or could be -h/--help)
+#make sure user gave some arguments
 if [ $# -eq 0 ]
+then
+	echo "No arguments given"
+	exit 1
+fi
+
+#read arguments
+matching=false
+verbose=false
+sorting=0 #0 = no sort, 1 = ascending, -1 = descending
+dir=""
+while test $# -gt 0
+do
+	case "$1" in
+		-m|--match)
+			matching=true
+			;;
+		-v|--verbose)
+			verbose=true
+			;;
+		-s|-sa|--sort)
+			sorting=1 #default to ascending if no sort order is explicitly given
+			;;
+		-sd)
+			sorting=-1
+			;;
+		-h|--help)
+			echo "Usage: ./vidSort.sh [FILE] ... [OPTION]"
+			echo "Command line utility to list duration and title of all files in a directory. Useful for manual file de-duplication"
+			echo "Takes exactly 1 directory path"
+			echo "Options:"
+			echo
+			echo "-s, --sort		sort by duration (ascending)"
+			echo "-sa				sort by duration (ascending)"
+			echo "-sd				sort by duration (descending)"
+			echo "-m, --match		only show files with matching durations"
+			echo "-v, --verbose		verbose mode"
+			echo "-h, --help		help"
+			echo
+			echo "Version 1.1"
+			exit 0
+			;;
+		-*|--*)
+			echo "bad option $1"
+			exit 1
+			;;
+		*)
+			#assume any non-option argument is a directory. We can only take 1 directory argument, so make sure the directory variable doesn't already have something assigned
+			if [ "$dir" == "" ]
+			then
+				dir="$1"
+			else
+				echo "Too many arguments"
+				exit 1
+			fi
+	esac
+	shift
+done
+
+if [ "$dir" == "" ]
 then
 	echo "No path given"
 	exit 1
 fi
 
 #make sure directory exists
-if ! [ -d "$1" ]
+if ! [ -d "$dir" ]
 then
-	echo "Invalid directory"
+	echo "Invalid directory $dir"
 	exit 1
 fi
 
-echo "working in " "$1"
-cd "$1"
+echo "working in $dir"
+cd "$dir"
 
 declare -a origVidNames=()
 declare -a origVidDurations=()
 
+#name reference variables
 declare -n vidNames=origVidNames
 declare -n vidDurations=origVidDurations
 
 #get file list
-echo "getting files list"
+if [ "$verbose" == true ]
+then
+	echo "getting files list"
+fi
 
 #temporarily setting the internal field seperator to the newline character so find works with whitespace. Hacky, works.
 IFS=$'\n'; set -f
 
-for i in $(find -name '*.mp4' -or -name '*.mov');
+for i in $(find -maxdepth 1 -name '*.mp4' -or -name '*.mov'); #maxdepth 1 excludes subfolders. 0 excludes hidden files
 do
 	newDuration=$(ffprobe -i "$i" -show_entries format=duration -v quiet -of csv="p=0")
 	iNewDuration=${newDuration%.*}
 	vidDurations+=($iNewDuration)
 	vidNames+=("$i")
 done
-unset IFS; set +f
+unset IFS; set +f #reset to normal
 
 length=${#vidDurations[@]}
 
-matching=false
-verbose=false
-sorting=false
-while test $# -gt 0
-do
-	case "$2" in
-		-m)
-			matching=true
-			;;
-	        -v)
-			verbose=true
-			;;
-		-s)
-			sorting=true
-			;;
-		-h) echo "help"
-			;;
-		--*) echo "bad option $2"
-			;;
-		*) echo "argument $2"
-			;;
-	esac
-	shift
-done
-
 if [ "$matching" == true ]
 then
-	echo "matching"
-
 	#loop through array and copies values to second array only if the same duration exists twice
+	
+	if [ "$verbose" == true ]
+	then
+		echo "matching"
+	fi
 
 	declare -a newVidNames=()
 	declare -a newVidDurations=()
-
-	echo "pruning"
 
 	newLength=0
 
 	for ((i = 0; i<$length; i++))
 	do
-		for((j = 0; j<$length; j++))
+		for ((j = 0; j<$length; j++))
 		do
 			if ((${vidDurations[i]} == ${vidDurations[j]} && $i != $j))
 			then
@@ -108,13 +145,23 @@ then
 
 	length=$newLength
 
+	#reassign name references
 	declare -n vidNames=newVidNames
 	declare -n vidDurations=newVidDurations
 fi
 
-if [ "$sorting" == true ]
+if (($sorting != 0)) #if sorting is enabled
 then
-	echo "sorting" $length "files"
+	if [ "$verbose" == true ]
+	then
+		if (($sorting == 1))
+		then
+			sortModeHR="ascending"
+		else
+			sortModeHR="descending"
+		fi
+		echo "sorting $length files, $sortModeHR"
+	fi
 	
 	#insertion sort
 	for((i=1;i<$length;i++))
@@ -122,7 +169,7 @@ then
 		j=$i-1
 		tempDur=${vidDurations[$i]}
 		tempName=${vidNames[$i]}
-		while((j>=0 && vidDurations[j]>tempDur))
+		while((j>=0 && (($sorting == 1 && vidDurations[j]>tempDur) || ($sorting == -1 && vidDurations[j]<tempDur))))
 		do
 			vidDurations[$j+1]=${vidDurations[$j]}
 			vidNames[$j+1]=${vidNames[$j]}
