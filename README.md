@@ -1,7 +1,10 @@
 # vidSort
 Command line utility to list duration and title of all files in a directory. Useful for manual file de-duplication. Built around ffprobe
 
-# Flags
+# Usage
+
+  Usage: ./vidSort.sh [FILE] ... [OPTION]
+
   -s, -sa: sort by duration (ascending)
   
   -sd: sort by duration (descending)
@@ -12,34 +15,42 @@ Command line utility to list duration and title of all files in a directory. Use
   
   -h: help
 
-  Target directory must always be the first argument!
+  Any other arguments, excluding those starting with - or -- (which will be treated as flags, and raise an error if invalid), are assumed to be directories. Multiple directories can be specified (though the output does not currently display the directory of each file). At least one target directory must be specified
 
 # Future plans:
-  
-  more supported extensions
   
   recursive mode
   
   matching with margin
     
-Might reimplement in c or python later
+  Might reimplement in c or python later
 
 # Changelog
 
+## v1.2
+
+* Added support for more file formats
+
+* Can now support multiple directories
+
 ## v1.1
 
-*added help
+* Added help
 
-*added verbose mode
+* Added verbose mode
 
-*move argument checking before file checking, to catch bad arguments faster
+* Move argument checking before file checking, to catch bad arguments faster
 
-*can put directory anywhere in the arguments, but only 1. Detect if multiple directories are given
+* Can put directory anywhere in the arguments, but only 1. Detect if multiple directories are given
 
-*can give options as option name or flag
+* Can give options as option name or flag
 
-*minor text formatting fixes
+* Minor text formatting fixes
 
-*ascending and descending sort options
+* Ascending and descending sort options
 
-*exclude subfolders in find
+* Exclude subfolders in find
+
+## v1.0
+
+* Initial release

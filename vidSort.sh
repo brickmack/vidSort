@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#vidSort v1.1
+#vidSort v1.2
 #Command line utility to list duration and title of all files in a directory. Useful for manual file de-duplication
 
 #Flags
@@ -21,7 +21,8 @@ fi
 matching=false
 verbose=false
 sorting=0 #0 = no sort, 1 = ascending, -1 = descending
-dir=""
+declare -a dirs=()
+
 while test $# -gt 0
 do
 	case "$1" in
@@ -40,8 +41,8 @@ do
 		-h|--help)
 			echo "Usage: ./vidSort.sh [FILE] ... [OPTION]"
 			echo "Command line utility to list duration and title of all files in a directory. Useful for manual file de-duplication"
-			echo "Takes exactly 1 directory path"
-			echo "Options:"
+			echo "Requires at least 1 directory path"
+			echo "Flags:"
 			echo
 			echo "-s, --sort		sort by duration (ascending)"
 			echo "-sa				sort by duration (ascending)"
@@ -50,7 +51,7 @@ do
 			echo "-v, --verbose		verbose mode"
 			echo "-h, --help		help"
 			echo
-			echo "Version 1.1"
+			echo "Version 1.2"
 			exit 0
 			;;
 		-*|--*)
@@ -58,33 +59,11 @@ do
 			exit 1
 			;;
 		*)
-			#assume any non-option argument is a directory. We can only take 1 directory argument, so make sure the directory variable doesn't already have something assigned
-			if [ "$dir" == "" ]
-			then
-				dir="$1"
-			else
-				echo "Too many arguments"
-				exit 1
-			fi
+			#assume any non-option argument is a directory
+			dirs+=("$1")
 	esac
 	shift
 done
-
-if [ "$dir" == "" ]
-then
-	echo "No path given"
-	exit 1
-fi
-
-#make sure directory exists
-if ! [ -d "$dir" ]
-then
-	echo "Invalid directory $dir"
-	exit 1
-fi
-
-echo "working in $dir"
-cd "$dir"
 
 declare -a origVidNames=()
 declare -a origVidDurations=()
@@ -93,23 +72,56 @@ declare -a origVidDurations=()
 declare -n vidNames=origVidNames
 declare -n vidDurations=origVidDurations
 
-#get file list
-if [ "$verbose" == true ]
+#build regex of all supported file extensionsRegex
+declare -a extensions=("mov" "flv" "h261" "h263" "h264" "m4v" "m4a" "3gp" "3g2" "mj2" "mp2" "mp3" "mpeg" "mpeg1video" "mpeg2video" "mpegts" "mpegtsraw" "mpegvideo" "oga" "ogg" "ogv" "opengl" "opus" "oss" "swf" "wav" "webm")
+#can also support webp, but theres issues with static ones.
+extensionsRegex="\(.*mp4\\"
+
+for i in "${extensions[@]}"
+do
+	extensionsRegex+="|.*"
+	extensionsRegex+="$i"
+	extensionsRegex+="\\"
+done
+
+extensionsRegex+=")"
+
+if [ "${dirs[0]}" == "" ]
 then
-	echo "getting files list"
+	echo "No path given"
+	exit 1
 fi
 
-#temporarily setting the internal field seperator to the newline character so find works with whitespace. Hacky, works.
-IFS=$'\n'; set -f
-
-for i in $(find -maxdepth 1 -name '*.mp4' -or -name '*.mov'); #maxdepth 1 excludes subfolders. 0 excludes hidden files
+for dir in "${dirs[@]}"
 do
-	newDuration=$(ffprobe -i "$i" -show_entries format=duration -v quiet -of csv="p=0")
-	iNewDuration=${newDuration%.*}
-	vidDurations+=($iNewDuration)
-	vidNames+=("$i")
+	#make sure directory exists
+	if ! [ -d "$dir" ]
+	then
+		echo "Invalid directory $dir"
+		exit 1
+	fi
+	
+	echo "working in $dir"
+	cd "$dir"
+	
+	#get file list
+	if [ "$verbose" == true ]
+	then
+		echo "getting files list"
+	fi
+
+	#temporarily setting the internal field seperator to the newline character so find works with whitespace. Hacky, works.
+	IFS=$'\n'; set -f
+
+	for i in $(find -maxdepth 1 -regex "$extensionsRegex"); #maxdepth 1 excludes subfolders. 0 excludes hidden files
+	do
+		newDuration=$(ffprobe -i "$i" -show_entries format=duration -v quiet -of csv="p=0")
+		iNewDuration=${newDuration%.*}
+		vidDurations+=($iNewDuration)
+		vidNames+=("$i")
+	done
+	unset IFS; set +f #reset to normal
 done
-unset IFS; set +f #reset to normal
 
 length=${#vidDurations[@]}
 
